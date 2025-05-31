@@ -14,8 +14,10 @@ import org.springframework.web.bind.annotation.RestController;
 import com.aitstudgroup.ala_ata.demo.dto.LoginRequest;
 import com.aitstudgroup.ala_ata.demo.dto.PlayerResponse;
 import com.aitstudgroup.ala_ata.demo.dto.RegisterRequest;
+import com.aitstudgroup.ala_ata.demo.dto.AuthenticationResponse;
 import com.aitstudgroup.ala_ata.demo.model.Player;
 import com.aitstudgroup.ala_ata.demo.service.PlayerService;
+import com.aitstudgroup.ala_ata.demo.service.JwtService;
 
 import jakarta.validation.Valid;
 import reactor.core.publisher.Flux;
@@ -26,9 +28,11 @@ import reactor.core.publisher.Mono;
 @CrossOrigin
 public class PlayerController {
     private final PlayerService playerService;
+    private final JwtService jwtService;
     
-    public PlayerController(PlayerService playerService) {
+    public PlayerController(PlayerService playerService, JwtService jwtService) {
         this.playerService = playerService;
+        this.jwtService = jwtService;
     }
     
     @PostMapping("/register")
@@ -43,11 +47,16 @@ public class PlayerController {
     }
     
     @PostMapping("/login")
-    public Mono<ResponseEntity<PlayerResponse>> login(@RequestBody LoginRequest request) {
+    public Mono<ResponseEntity<AuthenticationResponse>> login(@RequestBody LoginRequest request) {
         return playerService.authenticatePlayer(request.getUsername(), request.getPassword())
-            .map(player -> ResponseEntity.ok(convertToPlayerResponse(player)))
-            .defaultIfEmpty(ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new PlayerResponse(null, "Неверные учетные данные")));
+            .map(player -> {
+                // Return a dummy token instead of JWT
+                String dummyToken = "dummy-auth-token-" + player.getId();
+                PlayerResponse pr = convertToPlayerResponse(player);
+                AuthenticationResponse authResponse = new AuthenticationResponse(dummyToken, pr);
+                return ResponseEntity.ok(authResponse);
+            })
+            .defaultIfEmpty(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
     }
     
     @GetMapping("/{id}")
