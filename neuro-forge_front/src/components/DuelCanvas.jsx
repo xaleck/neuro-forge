@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { getMatchDetails } from '../api/matchService';
+import { getMatchDetails } from '../api/matchService'; // Uncommented import
+import OptimizationRallyChart from './games/OptimizationRallyChart'; // Импортируем компонент
 import SockJS from 'sockjs-client';
 import { Client } from '@stomp/stompjs';
 import TranslationBattleGame from '../minigames/TranslationBattle/TranslationBattleGame';
@@ -12,8 +13,9 @@ export default function DuelCanvas() {
 
   // WebSocket client for real-time duel updates
   const [stompClient, setStompClient] = useState(null);
-  const [matchDetails, setMatchDetails] = useState(null);
-  const [loading, setLoading] = useState(true);
+  // Используем моковые данные по умолчанию, setLoading(false) т.к. данные уже есть - REVERTED
+  const [matchDetails, setMatchDetails] = useState(null); // Initialize with null
+  const [loading, setLoading] = useState(true); // Set to true, data will be fetched
   const [error, setError] = useState('');
   
   // Translation Battle game state
@@ -43,9 +45,11 @@ export default function DuelCanvas() {
     { id: 9, sourceLanguage: 'ru', targetLanguage: 'en', text: 'Доброе утро', correctTranslation: 'Good morning' },
     { id: 10, sourceLanguage: 'en', targetLanguage: 'zh', text: 'Nice to meet you', correctTranslation: '很高兴见到你' }
   ];
+  const [parsedMatchData, setParsedMatchData] = useState(null); 
 
-  const matchId = location.state?.matchId;
+  const matchId = location.state?.matchId; 
 
+  // Uncommented useEffect for loading data from backend
   useEffect(() => {
     if (!matchId) {
       setError('No Match ID provided. Cannot load duel.');
@@ -288,14 +292,35 @@ export default function DuelCanvas() {
   }
 
   if (!matchDetails) {
-    return (
-      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
-        <div className="bg-gray-800 p-8 rounded-lg">
-          <p className="text-xl">Match details not found.</p>
-        </div>
-      </div>
-    );
+    return <div className="text-center text-red-500">Не удалось загрузить детали матча или матч не найден.</div>;
   }
+
+  // Определяем, какой компонент игры отображать
+  const renderGameComponent = () => {
+    if (!matchDetails || !matchDetails.matchType) {
+      return <p>Тип матча не определен.</p>;
+    }
+
+    switch (matchDetails.matchType) {
+      case 'OPTIMIZATION':
+        // Для OPTIMIZATION, данные игры теперь должны приходить в matchDetails.matchData (или parsedMatchData)
+        // Если бэкенд возвращает gameData прямо в matchDetails.matchData, используем его.
+        // Если gameData это JSON строка в matchDetails.matchData, то parsedMatchData будет содержать объект.
+        return <OptimizationRallyChart gameData={parsedMatchData} />;
+      // TODO: Добавить другие типы игр
+      // case 'ANOTHER_GAME_TYPE':
+      //   return <AnotherGameComponent gameData={parsedMatchData} />;
+      default:
+        return <p>Неизвестный тип матча: {matchDetails.matchType}</p>;
+    }
+  };
+
+  const getStatusText = () => {
+    if (matchDetails.endedAt) {
+      return `Match Concluded! Winner: ${matchDetails.winnerId || 'Draw'}`;
+    }
+    return 'Match in Progress...';
+  };
 
   // Determine player display names based on who the current user is
   const isPlayer1 = user?.id === matchDetails.player1Id;
@@ -367,4 +392,4 @@ export default function DuelCanvas() {
       </div>
     </div>
   );
-} 
+}
