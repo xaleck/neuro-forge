@@ -121,6 +121,7 @@ export default function Matchmaking() {
                 <option value="COMPRESSION">Compression</option>
                 <option value="BIAS_DETECTIVE">Bias Detective</option>
                 <option value="LOGIC_TRACE">Logic Trace</option>
+                <option value="TRANSLATION">Translation Battle</option>
               </select>
             </div>
 

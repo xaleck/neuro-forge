@@ -7,11 +7,14 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 import com.aitstudgroup.ala_ata.demo.model.Match;
 import com.aitstudgroup.ala_ata.demo.repository.AIModelRepository;
 import com.aitstudgroup.ala_ata.demo.repository.MatchRepository;
 import com.aitstudgroup.ala_ata.demo.repository.PlayerRepository;
+import com.aitstudgroup.ala_ata.demo.controller.DuelWebSocketController;
+import com.aitstudgroup.ala_ata.demo.service.TranslationBattleService;
 
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -24,17 +27,26 @@ public class MatchService {
     private final PlayerRepository playerRepository;
     private final AIModelRepository aiModelRepository;
     private final PlayerService playerService;
+    private final DuelWebSocketController duelWebSocketController;
+    private final SimpMessagingTemplate messagingTemplate;
+    private final TranslationBattleService translationBattleService;
     
     @Autowired
     public MatchService(
             MatchRepository matchRepository,
             PlayerRepository playerRepository,
             AIModelRepository aiModelRepository,
-            PlayerService playerService) {
+            PlayerService playerService,
+            DuelWebSocketController duelWebSocketController,
+            SimpMessagingTemplate messagingTemplate,
+            TranslationBattleService translationBattleService) {
         this.matchRepository = matchRepository;
         this.playerRepository = playerRepository;
         this.aiModelRepository = aiModelRepository;
         this.playerService = playerService;
+        this.duelWebSocketController = duelWebSocketController;
+        this.messagingTemplate = messagingTemplate;
+        this.translationBattleService = translationBattleService;
     }
     
     // Создать новый матч
@@ -74,7 +86,25 @@ public class MatchService {
                 match.setMatchType(matchType);
                 match.setStartedAt(Instant.now());
                 
-                return matchRepository.save(match);
+                // Initialize game-specific data if it's a Translation Battle
+                if ("TRANSLATION".equalsIgnoreCase(match.getMatchType())) {
+                    return translationBattleService.initializeMatchWithGameState(match)
+                        .flatMap(matchRepository::save)
+                        .doOnSuccess(savedMatch -> {
+                            logger.info("TRANSLATION match {} created and saved successfully. Initial matchData: {}", savedMatch.getId(), savedMatch.getMatchData());
+                            // Notify players or a general topic about the new match
+                            messagingTemplate.convertAndSend("/topic/matches", savedMatch); // Example notification
+                        })
+                        .doOnError(error -> logger.error("Error saving translation match: {}", error.getMessage()));
+                } else {
+                    // For other match types, save directly
+                    return matchRepository.save(match)
+                        .doOnSuccess(savedMatch -> {
+                             logger.info("Match {} of type {} created and saved successfully.", savedMatch.getId(), savedMatch.getMatchType());
+                            messagingTemplate.convertAndSend("/topic/matches", savedMatch);
+                        })
+                        .doOnError(error -> logger.error("Error saving non-translation match: {}", error.getMessage()));
+                }
             });
     }
     
@@ -123,7 +153,13 @@ public class MatchService {
                 // Обновляем данные матча
                 return matchRepository.finishMatch(matchId, winnerId, player1Score, player2Score, endTime)
                     .then(matchData != null ? matchRepository.updateMatchData(matchId, matchData) : Mono.just(0))
-                    .then(matchRepository.findById(matchId));
+                    .then(matchRepository.findById(matchId))
+                    .doOnSuccess(finishedMatch -> {
+                        if (finishedMatch != null) {
+                            logger.info("Match {} finished. Sending WebSocket update.", finishedMatch.getId());
+                            duelWebSocketController.sendDuelUpdate(finishedMatch.getId(), finishedMatch);
+                        }
+                    });
             })
             .flatMap(updatedMatch -> {
                 // Обновляем ELO рейтинг игроков (только если есть победитель)

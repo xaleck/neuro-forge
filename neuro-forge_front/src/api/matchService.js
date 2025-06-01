@@ -1,7 +1,5 @@
-import axios from 'axios';
-
+import api from '../services/api-service';
 // Axios instance pointing to our backend API
-const api = axios.create({ baseURL: 'http://localhost:8080/api' });
 
 /**
  * Create a new PvP match between two players/models.

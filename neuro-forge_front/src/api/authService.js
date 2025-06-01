@@ -1,7 +1,5 @@
-import axios from 'axios';
-
+import api from '../services/api-service';
 // Create axios instance with baseURL and interceptors
-const api = axios.create({ baseURL: 'http://localhost:8080/api' });
 
 // No longer attach JWT tokens to requests
 api.interceptors.request.use(

@@ -1,8 +1,6 @@
-import axios from 'axios';
 import { getCurrentToken } from './authService';
-
+import api from '../services/api-service';
 // Create axios instance
-const api = axios.create({ baseURL: 'http://localhost:8080/api' });
 
 // Add token to requests
 api.interceptors.request.use(

@@ -1,8 +1,6 @@
-import axios from 'axios';
 import { getCurrentToken } from './authService';
-
+import api from '../services/api-service';
 // Axios instance with JWT
-const api = axios.create({ baseURL: 'http://localhost:8080/api' });
 api.interceptors.request.use(
   config => {
     const token = getCurrentToken();
