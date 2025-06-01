@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 // import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'; // Не используется в этой версии
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { useAuth } from '../../context/AuthContext'; // To get current user
 
 // Вспомогательная функция для преобразования строки сложности в числовой балл (меньше - лучше)
 const getComplexityScore = (complexityString) => {
@@ -90,175 +91,282 @@ const MetricsDisplay = ({ metrics, title, color }) => {
   );
 };
 
-// Компонент для отображения изменений кода
-const CodeDiff = ({ originalCode, optimizedCode, title, color }) => {
-  const originalLines = originalCode.split('\n');
-  const optimizedLines = optimizedCode.split('\n');
-  const maxLength = Math.max(originalLines.length, optimizedLines.length);
-  const diffLines = [];
-
-  for (let i = 0; i < maxLength; i++) {
-    const originalLine = i < originalLines.length ? originalLines[i] : '';
-    const optimizedLine = i < optimizedLines.length ? optimizedLines[i] : '';
-    if (originalLine !== optimizedLine) {
-      diffLines.push({
-        lineNumber: i + 1,
-        originalLine,
-        optimizedLine,
-        status: originalLine === '' ? 'added' : optimizedLine === '' ? 'removed' : 'modified'
-      });
-    }
-  }
-
+// Компонент для отображения изменений кода (или просто кода)
+const CodeDisplay = ({ code, title, color, language = 'javascript' }) => {
   return (
-    <div className="flex flex-col h-full"> {/* h-full чтобы занять пространство от родителя (flex-1) */}
+    <div className="flex flex-col h-full">
       <h4 className={`text-sm font-semibold mb-1 ${color} shrink-0`}>{title}</h4>
-      <div className="bg-gray-800 rounded-md p-2 flex-1 overflow-auto"> {/* flex-1 чтобы занять оставшееся место, overflow-auto для скролла */}
+      <div className="bg-gray-800 rounded-md p-2 flex-1 overflow-auto">
         <SyntaxHighlighter
-          language="javascript"
+          language={language}
           style={vscDarkPlus}
-          customStyle={{ margin: 0, borderRadius: '0.25rem', fontSize: '0.8rem', height: '100%' }} // height: 100% для заполнения родителя
+          customStyle={{ margin: 0, borderRadius: '0.25rem', fontSize: '0.8rem', height: '100%' }}
           showLineNumbers={true}
           wrapLines={true}
-          lineProps={lineNumber => {
-            const diff = diffLines.find(d => d.lineNumber === lineNumber);
-            if (!diff) return { style: {} };
-            return {
-              style: {
-                backgroundColor: diff.status === 'added' ? 'rgba(46, 160, 67, 0.15)' :
-                               diff.status === 'removed' ? 'rgba(248, 81, 73, 0.15)' :
-                               'rgba(246, 185, 59, 0.15)',
-                display: 'block'
-              }
-            };
-          }}
         >
-          {optimizedCode}
+          {code || "// No code submitted yet"}
         </SyntaxHighlighter>
       </div>
     </div>
   );
 };
 
-export default function OptimizationRallyChart({ gameData }) {
-  const [currentTimeIndex, setCurrentTimeIndex] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
+// Renamed from OptimizationRallyChart to OptimizationRallyGame to reflect its new role
+// Props: matchId, user (from useAuth), stompClient, initialMatchDetails (passed as gameData initially by DuelCanvas)
+export default function OptimizationRallyGame({ matchId, stompClient, initialMatchDetails, user: externallyPassedUser }) { 
+  const { user: authUser } = useAuth(); // Get authenticated user from context
+  const currentUser = externallyPassedUser || authUser; // Prioritize passed user if available (e.g. for testing or specific scenarios)
+  
+  const [optimizationGameState, setOptimizationGameState] = useState(null);
+  const [currentUserCode, setCurrentUserCode] = useState('');
+  // const [isLoading, setIsLoading] = useState(true); // Replaced by checking optimizationGameState
+  // const [error, setError] = useState(null); // Can be added if specific errors for this component arise
 
-  if (!gameData) {
-    return <p className="text-gray-400">Загрузка данных игры...</p>;
+  // Initialize and update game state from props (initial load) or WebSocket
+  useEffect(() => {
+    if (initialMatchDetails && initialMatchDetails.matchData) {
+      console.log("[OptimizationRallyGame] Received initialMatchDetails with matchData:", initialMatchDetails.matchData);
+      try {
+        // Assuming matchData in initialMatchDetails is the already parsed OptimizationRallyState object
+        // as prepared by DuelCanvas's parsedMatchData state.
+        // If it were a JSON string, we'd JSON.parse() it here.
+        if (typeof initialMatchDetails.matchData === 'object'){
+            setOptimizationGameState(initialMatchDetails.matchData);
+            // Populate currentUserCode if resuming a game where user already typed something (more advanced)
+            // For now, we start with empty editor.
+        } else {
+             console.error("[OptimizationRallyGame] initialMatchDetails.matchData is not an object as expected. Type:", typeof initialMatchDetails.matchData, initialMatchDetails.matchData);
+             // Attempt to parse if it's a string, otherwise error
+             try {
+                const parsedData = JSON.parse(initialMatchDetails.matchData);
+                setOptimizationGameState(parsedData);
+             } catch (e) {
+                console.error("[OptimizationRallyGame] Failed to parse initialMatchDetails.matchData string:", e);
+                // setError("Failed to load game data from initial details.");
+             }
+        }
+      } catch (e) {
+        console.error("[OptimizationRallyGame] Error processing initialMatchDetails.matchData:", e);
+        // setError("Error processing initial game data.");
+      }
+    } else if (initialMatchDetails) {
+        // This case handles when initialMatchDetails is present, but matchData is not (yet).
+        // It implies that DuelCanvas passed down `parsedMatchData` which was null.
+        // OptimizationRallyChart shows "Загрузка данных игры..." in this scenario already.
+        console.log("[OptimizationRallyGame] initialMatchDetails present, but no matchData yet. Waiting for WebSocket or valid data.");
+        setOptimizationGameState(null); // Ensure it's null if no valid data
+    }
+  }, [initialMatchDetails]);
+
+  // WebSocket subscription for game state updates
+  useEffect(() => {
+    if (stompClient && stompClient.connected && matchId) {
+      const topic = `/topic/duel/${matchId}/optimization/state`;
+      console.log(`[OptimizationRallyGame] Subscribing to ${topic}`);
+      const subscription = stompClient.subscribe(topic, message => {
+        try {
+          const updatedGameState = JSON.parse(message.body);
+          console.log('[OptimizationRallyGame] Received game state update via WebSocket:', updatedGameState);
+          setOptimizationGameState(updatedGameState);
+        } catch (e) {
+          console.error('[OptimizationRallyGame] Error parsing WebSocket game state update:', e);
+          // setError("Error receiving game update.");
+        }
+      });
+
+      // Request initial state upon connection (optional, if backend doesn't send it automatically on match creation broadcast)
+      // stompClient.publish({ destination: `/app/duel/${matchId}/optimization/requestState`, body: JSON.stringify({ userId: currentUser?.id }) });
+
+      return () => {
+        console.log(`[OptimizationRallyGame] Unsubscribing from ${topic}`);
+        subscription.unsubscribe();
+      };
+    }
+  }, [stompClient, matchId, currentUser]); // currentUser dependency if used in requestState
+
+  const handleCodeSubmission = useCallback(() => {
+    if (!stompClient || !stompClient.connected || !currentUser || !optimizationGameState) {
+      console.warn("[OptimizationRallyGame] Cannot submit: STOMP not connected, no user, or no game state.");
+      return;
+    }
+    if (optimizationGameState.gameStatus !== 'ROUND_IN_PROGRESS' && 
+        !(currentUser.id === optimizationGameState.player1Id && optimizationGameState.gameStatus === 'AWAITING_PLAYER_1_SUBMISSION') &&
+        !(currentUser.id === optimizationGameState.player2Id && optimizationGameState.gameStatus === 'AWAITING_PLAYER_2_SUBMISSION')) {
+      console.warn("[OptimizationRallyGame] Cannot submit: Not player's turn or game not in submittable state. Status:", optimizationGameState.gameStatus);
+      return;
+    }
+    if (currentUserCode.trim() === '') {
+      alert("Please enter your optimized code.");
+      return;
+    }
+
+    const payload = {
+      userId: currentUser.id,
+      code: currentUserCode,
+      step: optimizationGameState.currentStep,
+    };
+    console.log("[OptimizationRallyGame] Submitting code:", payload);
+    stompClient.publish({
+      destination: `/app/duel/${matchId}/optimization/submit`,
+      body: JSON.stringify(payload),
+    });
+    setCurrentUserCode(''); // Clear input after submission
+  }, [stompClient, matchId, currentUser, optimizationGameState, currentUserCode]);
+
+
+  // --- UI Rendering --- //
+  if (!optimizationGameState) {
+    return <p className="text-gray-400 text-center py-10">Loading Optimization Rally game data...</p>;
   }
 
   const {
     problemDescription,
     originalCode,
-    timeSteps = 10, // Убедитесь, что timeSteps соответствует длине массивов progress
+    timeSteps,
+    currentStep,
     player1Progress,
-    player2Progress
-  } = gameData;
-
-  useEffect(() => {
-    if (!isPlaying) return;
-    const interval = setInterval(() => {
-      setCurrentTimeIndex(prev => {
-        if (prev >= timeSteps - 1) {
-          setIsPlaying(false);
-          return prev;
-        }
-        return prev + 1;
-      });
-    }, 1500);
-    return () => clearInterval(interval);
-  }, [isPlaying, timeSteps]);
-
-  const player1CurrentState = player1Progress && player1Progress[currentTimeIndex] ?
-    player1Progress[currentTimeIndex] : { code: originalCode, metrics: { executionTime: 999, memoryUsage: 999, complexity: 'N/A' } };
-
-  const player2CurrentState = player2Progress && player2Progress[currentTimeIndex] ?
-    player2Progress[currentTimeIndex] : { code: originalCode, metrics: { executionTime: 999, memoryUsage: 999, complexity: 'N/A' } };
-
-  const player1Efficiency = calculateEfficiency(player1CurrentState.metrics);
-  const player2Efficiency = calculateEfficiency(player2CurrentState.metrics);
+    player2Progress,
+    gameStatus,
+    player1Id,
+    // player2Id // Can be derived if needed
+  } = optimizationGameState;
   
-  let currentLeaderText = 'Ничья';
-  if (player1Efficiency > player2Efficiency) {
-    currentLeaderText = 'Модель 1';
-  } else if (player2Efficiency > player1Efficiency) {
-    currentLeaderText = 'Модель 2';
+  const isPlayer1 = currentUser?.id === player1Id;
+  const ownProgress = isPlayer1 ? player1Progress : player2Progress;
+  const opponentProgress = isPlayer1 ? player2Progress : player1Progress;
+
+  // Get current code and metrics for display for a specific step and player progress list
+  const getStepData = (progressList, stepIndex) => {
+    if (progressList && stepIndex >= 0 && progressList.length > stepIndex) {
+      const entry = progressList[stepIndex];
+      if (entry && typeof entry === 'object') {
+        return entry;
+      }
+    }
+    return { code: "// Not submitted yet", metrics: null }; // Default if no data for the step
+  };
+
+  // For now, just display the latest submission. A more complex UI could show all steps.
+  const player1CurrentStepData = getStepData(player1Progress, currentStep -1 ); // currentStep is 1-indexed
+  const player2CurrentStepData = getStepData(player2Progress, currentStep - 1);
+  
+  let gameStatusText = "Loading status...";
+  let canSubmit = false;
+
+  switch (gameStatus) {
+    case 'NOT_STARTED':
+      gameStatusText = "Game has not started yet.";
+      break;
+    case 'ROUND_IN_PROGRESS':
+      gameStatusText = `Round ${currentStep} of ${timeSteps}. Submit your optimization!`;
+      canSubmit = true;
+      break;
+    case 'AWAITING_PLAYER_1_SUBMISSION':
+      gameStatusText = isPlayer1 ? `Round ${currentStep}: Your turn to submit.` : `Round ${currentStep}: Waiting for Player 1.`;
+      canSubmit = isPlayer1;
+      break;
+    case 'AWAITING_PLAYER_2_SUBMISSION':
+      gameStatusText = !isPlayer1 ? `Round ${currentStep}: Your turn to submit.` : `Round ${currentStep}: Waiting for Player 2.`;
+      canSubmit = !isPlayer1;
+      break;
+    case 'ROUND_COMPLETED': // This state might be brief, backend auto-advances
+      gameStatusText = `Round ${currentStep -1} completed. Preparing next round...`;
+      break;
+    case 'GAME_OVER':
+      gameStatusText = "Game Over!";
+      // Determine winner here based on final scores (to be added to gameState from backend)
+      break;
+    default:
+      gameStatusText = `Status: ${gameStatus}`;
   }
 
   return (
-    <div className="w-full h-full flex flex-col p-1 text-white"> {/* Родитель в DuelCanvas имеет h-96 */}
+    <div className="w-full h-full flex flex-col p-1 text-white">
       {problemDescription && (
-        <h4 className="text-md font-semibold mb-2 text-center text-yellow-300 shrink-0">{problemDescription}</h4>
+        <h3 className="text-lg font-semibold mb-3 text-center text-yellow-400 shrink-0">{problemDescription}</h3>
+      )}
+      <p className="text-center text-md mb-3">{gameStatusText}</p>
+      <p className="text-center text-sm mb-3">Step: {currentStep} / {timeSteps}</p>
+
+      {/* Original Code Display (for reference) */}
+      {currentStep === 1 && originalCode && (
+         <div className="mb-4 p-2 bg-gray-850 rounded-md">
+            <h4 className="text-sm font-semibold mb-1 text-gray-300">Original Code to Optimize:</h4>
+            <SyntaxHighlighter language="javascript" style={vscDarkPlus} customStyle={{ margin: 0, fontSize: '0.75rem' }} showLineNumbers wrapLines>
+                {originalCode}
+            </SyntaxHighlighter>
+         </div>
       )}
 
-      <div className="flex flex-row justify-between mb-2 items-center shrink-0">
-        <div className="text-sm">
-          Шаг: {currentTimeIndex + 1} из {timeSteps}
-        </div>
-        <div className="flex space-x-2">
-          <button
-            onClick={() => setCurrentTimeIndex(prev => Math.max(0, prev - 1))}
-            disabled={currentTimeIndex === 0}
-            className="px-2 py-1 bg-gray-700 rounded-md text-xs disabled:opacity-50"
-          >
-            ◀ Назад
-          </button>
-          <button
-            onClick={() => setIsPlaying(!isPlaying)}
-            className="px-2 py-1 bg-blue-600 rounded-md text-xs"
-          >
-            {isPlaying ? '⏸ Пауза' : '▶ Воспроизвести'}
-          </button>
-          <button
-            onClick={() => setCurrentTimeIndex(prev => Math.min(timeSteps - 1, prev + 1))}
-            disabled={currentTimeIndex === timeSteps - 1}
-            className="px-2 py-1 bg-gray-700 rounded-md text-xs disabled:opacity-50"
-          >
-            Вперед ▶
-          </button>
-        </div>
-        <div className="text-sm">
-          Лидер: {currentLeaderText}
-        </div>
-      </div>
-
-      {/* Этот блок должен занимать оставшееся место и позволять внутренним блокам корректно распределять высоту */}
-      <div className="flex flex-col sm:flex-row flex-1 gap-2 overflow-hidden"> {/* flex-1 для занятия оставшегося места, overflow-hidden для обрезки */}
-        {/* Колонка для Модели 1 */}
-        <div className="flex-1 flex flex-col min-w-0"> {/* min-w-0 для правильного flex поведения с текстом */}
-          <MetricsDisplay
-            metrics={player1CurrentState.metrics}
-            title="Модель 1"
-            color="text-blue-400"
+      {/* Player Code Submission Area */}
+      {gameStatus !== 'GAME_OVER' && (
+        <div className="mb-4 p-3 bg-gray-750 rounded-lg">
+          <h4 className="text-md font-semibold mb-2">Your Code for Step {currentStep}:</h4>
+          <textarea
+            className="w-full p-2 bg-gray-900 text-white rounded-md border border-gray-600 focus:ring-2 focus:ring-yellow-500 outline-none font-mono text-sm min-h-[150px]"
+            value={currentUserCode}
+            onChange={(e) => setCurrentUserCode(e.target.value)}
+            placeholder={`Enter your optimized code for step ${currentStep}...`}
+            disabled={!canSubmit}
           />
-          <div className="flex-1 relative"> {/* Этот div позволяет CodeDiff занять оставшееся место */}
-            <CodeDiff
-              originalCode={originalCode}
-              optimizedCode={player1CurrentState.code}
-              title="Оптимизированный код (Модель 1)"
-              color="text-blue-400"
+          <button
+            onClick={handleCodeSubmission}
+            disabled={!canSubmit || currentUserCode.trim() === ''}
+            className="mt-3 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md text-sm disabled:opacity-50 w-full sm:w-auto"
+          >
+            Submit Code for Step {currentStep}
+          </button>
+        </div>
+      )}
+
+      {/* Progress Display Area - showing current or last submitted step */}
+      <div className="flex flex-col sm:flex-row flex-1 gap-3 overflow-hidden mt-2">
+        {/* Current User's Last Submission & Metrics */}
+        <div className="flex-1 flex flex-col min-w-0 bg-gray-800 p-3 rounded-lg">
+          <h4 className="text-md font-semibold mb-2 text-blue-400">Your Last Submission (Step {isPlayer1 ? player1Progress?.length : player2Progress?.length})</h4>
+          {getStepData(ownProgress, (isPlayer1 ? player1Progress?.length : player2Progress?.length) -1).metrics && (
+            <MetricsDisplay 
+                metrics={getStepData(ownProgress, (isPlayer1 ? player1Progress?.length : player2Progress?.length) -1).metrics} 
+                title="Your Metrics" color="text-blue-400" 
+            />
+          )}
+          <div className="flex-1 relative mt-2">
+            <CodeDisplay 
+                code={getStepData(ownProgress, (isPlayer1 ? player1Progress?.length : player2Progress?.length) -1).code} 
+                title="Your Code" color="text-blue-400" 
             />
           </div>
         </div>
 
-        {/* Колонка для Модели 2 */}
-        <div className="flex-1 flex flex-col min-w-0">
-          <MetricsDisplay
-            metrics={player2CurrentState.metrics}
-            title="Модель 2"
-            color="text-red-400"
-          />
-          <div className="flex-1 relative">
-            <CodeDiff
-              originalCode={originalCode}
-              optimizedCode={player2CurrentState.code}
-              title="Оптимизированный код (Модель 2)"
-              color="text-red-400"
+        {/* Opponent's Last Submission & Metrics */}
+        <div className="flex-1 flex flex-col min-w-0 bg-gray-800 p-3 rounded-lg">
+          <h4 className="text-md font-semibold mb-2 text-red-400">Opponent's Last Submission (Step {!isPlayer1 ? player1Progress?.length : player2Progress?.length})</h4>
+          {getStepData(opponentProgress, (!isPlayer1 ? player1Progress?.length : player2Progress?.length)-1).metrics && (
+            <MetricsDisplay 
+                metrics={getStepData(opponentProgress, (!isPlayer1 ? player1Progress?.length : player2Progress?.length)-1).metrics} 
+                title="Opponent's Metrics" color="text-red-400" 
+            />
+          )}
+          <div className="flex-1 relative mt-2">
+            <CodeDisplay 
+                code={getStepData(opponentProgress, (!isPlayer1 ? player1Progress?.length : player2Progress?.length)-1).code} 
+                title="Opponent's Code" color="text-red-400" 
             />
           </div>
         </div>
       </div>
+
+      {/* TODO: Add a section for GAME_OVER summary, scores, winner */}
+      {gameStatus === 'GAME_OVER' && (
+        <div className="mt-6 text-center p-4 bg-gray-700 rounded-lg">
+          <h3 className="text-2xl font-bold text-green-400">Game Over!</h3>
+          {/* Display final scores and winner - requires backend to send this info */}
+          <p className="mt-2">Final results will be displayed here.</p>
+        </div>
+      )}
     </div>
   );
 }
+
+// Old structure was for display only, replaced by the interactive game component above
+// export default function OptimizationRallyChart({ gameData }) { ... }

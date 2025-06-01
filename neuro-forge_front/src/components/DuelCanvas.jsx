@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getMatchDetails } from '../api/matchService'; // Uncommented import
-import OptimizationRallyChart from './games/OptimizationRallyChart'; // Импортируем компонент
+import OptimizationRallyGame from './games/OptimizationRallyChart'; // Corrected import name for the refactored component
 import SockJS from 'sockjs-client';
 import { Client } from '@stomp/stompjs';
 import TranslationBattleGame from '../minigames/TranslationBattle/TranslationBattleGame';
@@ -75,6 +75,35 @@ export default function DuelCanvas() {
 
     fetchMatch();
   }, [matchId]);
+
+  // useEffect to parse matchData when matchDetails changes or matchData within it changes
+  useEffect(() => {
+    if (matchDetails && matchDetails.matchData) {
+      if (typeof matchDetails.matchData === 'string') {
+        try {
+          const parsed = JSON.parse(matchDetails.matchData);
+          setParsedMatchData(parsed);
+          console.log('[DuelCanvas] Successfully parsed matchData JSON string:', parsed);
+        } catch (e) {
+          console.error('[DuelCanvas] Failed to parse matchData JSON string:', e, "\nRaw data:", matchDetails.matchData);
+          setError('Failed to parse game data.');
+          setParsedMatchData(null); 
+        }
+      } else if (typeof matchDetails.matchData === 'object') {
+        // If matchData is already an object (e.g., from a WebSocket update that pre-parses it, or if backend sends object)
+        setParsedMatchData(matchDetails.matchData);
+        console.log('[DuelCanvas] Used pre-existing object for matchData:', matchDetails.matchData);
+      } else {
+        // matchData is of an unexpected type
+        console.warn('[DuelCanvas] matchData is of unexpected type:', typeof matchDetails.matchData);
+        setError('Game data is in an unexpected format.');
+        setParsedMatchData(null);
+      }
+    } else {
+      // No matchDetails or no matchData in it, reset parsedMatchData
+      setParsedMatchData(null);
+    }
+  }, [matchDetails]); // Dependency: re-run if the matchDetails object reference changes.
 
   // Set up WebSocket connection for live duel updates
   useEffect(() => {
@@ -297,21 +326,75 @@ export default function DuelCanvas() {
 
   // Определяем, какой компонент игры отображать
   const renderGameComponent = () => {
-    if (!matchDetails || !matchDetails.matchType) {
-      return <p>Тип матча не определен.</p>;
+    if (!matchDetails) { // Check if matchDetails itself is null
+      return <p className="text-center py-10 text-gray-400">Loading match details...</p>;
+    }
+    if (!matchDetails.matchType) {
+      return <p className="text-center py-10 text-gray-400">Match type not determined yet.</p>;
     }
 
     switch (matchDetails.matchType) {
+      case 'TRANSLATION':
+        if (stompClient && user) {
+          return (
+            <TranslationBattleGame
+              matchId={matchId}
+              user={user}
+              stompClient={stompClient}
+              initialMatchDetails={matchDetails}
+            />
+          );
+        }
+        return (
+          <div className="text-center py-10">
+            <p className="text-xl text-yellow-500">Connecting to Translation Battle...</p>
+          </div>
+        );
+
       case 'OPTIMIZATION':
-        // Для OPTIMIZATION, данные игры теперь должны приходить в matchDetails.matchData (или parsedMatchData)
-        // Если бэкенд возвращает gameData прямо в matchDetails.matchData, используем его.
-        // Если gameData это JSON строка в matchDetails.matchData, то parsedMatchData будет содержать объект.
-        return <OptimizationRallyChart gameData={parsedMatchData} />;
+        // OptimizationRallyGame expects initialMatchDetails (containing matchData which is our parsedGameState)
+        // It also needs stompClient, matchId, and user for its operations.
+        // Ensure parsedMatchData is being correctly populated in DuelCanvas from matchDetails.matchData (JSON string)
+        if (!parsedMatchData && matchDetails.matchData) {
+            // This suggests parsedMatchData hasn't updated yet from the useEffect that parses matchDetails.matchData.
+            // Or, if matchData from backend is already an object, parsedMatchData should reflect it.
+            // OptimizationRallyGame will show its own loading state if its internal gameState is null.
+            console.log("[DuelCanvas] Waiting for parsedMatchData to be populated for OPTIMIZATION game.");
+        }
+        return (
+          <OptimizationRallyGame 
+            matchId={matchId} 
+            stompClient={stompClient} 
+            user={user} 
+            initialMatchDetails={{ // Construct the initialMatchDetails prop for OptimizationRallyGame
+                ...matchDetails, // Spread all of matchDetails for general info like player IDs, matchType etc.
+                matchData: parsedMatchData // Specifically pass the parsed game state object here
+            }} 
+          />
+        );
+      
       // TODO: Добавить другие типы игр
       // case 'ANOTHER_GAME_TYPE':
       //   return <AnotherGameComponent gameData={parsedMatchData} />;
+
       default:
-        return <p>Неизвестный тип матча: {matchDetails.matchType}</p>;
+        return (
+          <div className="text-center py-10">
+            <p className="text-2xl text-gray-400">This is a '{matchDetails.matchType}' duel.</p>
+            <p className="text-lg mt-2">No specific UI implemented for this game type yet.</p>
+            {matchDetails.matchData && (
+              <details className="mt-4 text-xs bg-gray-900 p-2 rounded text-left">
+                <summary className="cursor-pointer">View Raw Match Data</summary>
+                <pre className="mt-2 overflow-auto max-h-48">
+                  {typeof matchDetails.matchData === 'string'
+                    ? JSON.stringify(JSON.parse(matchDetails.matchData), null, 2)
+                    : JSON.stringify(matchDetails.matchData, null, 2)}
+                </pre>
+              </details>
+            )}
+            {!matchDetails.matchData && <p className="text-sm text-gray-500 mt-2">(No raw game data available)</p>}
+          </div>
+        );
     }
   };
 
@@ -365,30 +448,9 @@ export default function DuelCanvas() {
       </div>
 
       {/* Game-Specific Content Area */}
-      <div className="bg-gray-750 p-6 rounded-lg shadow-xl w-full max-w-3xl min-h-[300px]">
-        {matchDetails.matchType === 'TRANSLATION' && stompClient && user ? (
-          <TranslationBattleGame 
-            matchId={matchId} 
-            user={user} 
-            stompClient={stompClient} 
-            initialMatchDetails={matchDetails} 
-          />
-        ) : matchDetails.matchType === 'TRANSLATION' && !stompClient ? (
-            <div className="text-center py-10">
-                 <p className="text-xl text-yellow-500">Connecting to Translation Battle...</p>
-            </div>
-        ) : (
-          <div className="text-center py-10">
-            <p className="text-2xl text-gray-400">This is a '{matchDetails.matchType}' duel.</p>
-            <p className="text-lg mt-2">No specific UI implemented for this game type yet.</p>
-            {matchDetails.matchData && 
-              <details className="mt-4 text-xs bg-gray-900 p-2 rounded text-left">
-                <summary className="cursor-pointer">View Raw Match Data</summary>
-                <pre className="mt-2 overflow-auto max-h-48">{JSON.stringify(JSON.parse(matchDetails.matchData), null, 2)}</pre>
-              </details>
-            }
-          </div>
-        )}
+      <div className="bg-gray-750 p-6 rounded-lg shadow-xl w-full max-w-3xl min-h-[300px] flex flex-col justify-center">
+        {/* renderGameComponent will handle loading states internally or based on matchDetails presence */}
+        {renderGameComponent()}
       </div>
     </div>
   );

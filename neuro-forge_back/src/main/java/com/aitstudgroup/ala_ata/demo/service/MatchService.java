@@ -5,16 +5,19 @@ import java.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 import com.aitstudgroup.ala_ata.demo.model.Match;
+import com.aitstudgroup.ala_ata.demo.model.OptimizationRallyState;
 import com.aitstudgroup.ala_ata.demo.repository.AIModelRepository;
 import com.aitstudgroup.ala_ata.demo.repository.MatchRepository;
 import com.aitstudgroup.ala_ata.demo.repository.PlayerRepository;
 import com.aitstudgroup.ala_ata.demo.controller.DuelWebSocketController;
 import com.aitstudgroup.ala_ata.demo.service.TranslationBattleService;
+import com.aitstudgroup.ala_ata.demo.service.OptimizationRallyService;
 
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -27,9 +30,14 @@ public class MatchService {
     private final PlayerRepository playerRepository;
     private final AIModelRepository aiModelRepository;
     private final PlayerService playerService;
-    private final DuelWebSocketController duelWebSocketController;
+    
+    @Autowired
+    @Lazy
+    private DuelWebSocketController duelWebSocketController;
+    
     private final SimpMessagingTemplate messagingTemplate;
     private final TranslationBattleService translationBattleService;
+    private final OptimizationRallyService optimizationRallyService;
     
     @Autowired
     public MatchService(
@@ -37,16 +45,16 @@ public class MatchService {
             PlayerRepository playerRepository,
             AIModelRepository aiModelRepository,
             PlayerService playerService,
-            DuelWebSocketController duelWebSocketController,
             SimpMessagingTemplate messagingTemplate,
-            TranslationBattleService translationBattleService) {
+            TranslationBattleService translationBattleService,
+            OptimizationRallyService optimizationRallyService) {
         this.matchRepository = matchRepository;
         this.playerRepository = playerRepository;
         this.aiModelRepository = aiModelRepository;
         this.playerService = playerService;
-        this.duelWebSocketController = duelWebSocketController;
         this.messagingTemplate = messagingTemplate;
         this.translationBattleService = translationBattleService;
+        this.optimizationRallyService = optimizationRallyService;
     }
     
     // Создать новый матч
@@ -96,6 +104,18 @@ public class MatchService {
                             messagingTemplate.convertAndSend("/topic/matches", savedMatch); // Example notification
                         })
                         .doOnError(error -> logger.error("Error saving translation match: {}", error.getMessage()));
+                } else if ("OPTIMIZATION".equalsIgnoreCase(match.getMatchType())) {
+                    OptimizationRallyState initialOptimizationState = optimizationRallyService.initializeNewGame(match.getPlayer1Id(), match.getPlayer2Id());
+                    String optimizationMatchDataJson = optimizationRallyService.convertGameStateToJson(initialOptimizationState);
+                    match.setMatchData(optimizationMatchDataJson);
+                    return matchRepository.save(match)
+                        .doOnSuccess(savedMatch -> {
+                            logger.info("OPTIMIZATION match {} created and saved successfully. Initial matchData: {}", savedMatch.getId(), savedMatch.getMatchData());
+                            messagingTemplate.convertAndSend("/topic/matches", savedMatch);
+                             // Also broadcast the initial game state to the specific duel topic for Optimization Rally
+                            optimizationRallyService.broadcastGameStateUpdate(savedMatch.getId(), initialOptimizationState);
+                        })
+                        .doOnError(error -> logger.error("Error saving OPTIMIZATION match: {}", error.getMessage()));
                 } else {
                     // For other match types, save directly
                     return matchRepository.save(match)
