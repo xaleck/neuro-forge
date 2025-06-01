@@ -10,9 +10,7 @@ public class ModelResponse {
     private Long playerId;
     private Double accuracy;
     private Integer speedScore;
-    private boolean deployed;
     private Integer popularityScore;
-    private Integer creditsPerMinute;
     private Instant createdAt;
     private Instant lastUpdatedAt;
     
@@ -24,9 +22,7 @@ public class ModelResponse {
             this.playerId = model.getPlayerId();
             this.accuracy = model.getAccuracy();
             this.speedScore = model.getSpeedScore();
-            this.deployed = model.isDeployed();
             this.popularityScore = model.getPopularityScore();
-            this.creditsPerMinute = model.getCreditsPerMinute();
             this.createdAt = model.getCreatedAt();
             this.lastUpdatedAt = model.getLastUpdatedAt();
         }
@@ -53,16 +49,8 @@ public class ModelResponse {
         return speedScore;
     }
     
-    public boolean isDeployed() {
-        return deployed;
-    }
-    
     public Integer getPopularityScore() {
         return popularityScore;
-    }
-    
-    public Integer getCreditsPerMinute() {
-        return creditsPerMinute;
     }
     
     public Instant getCreatedAt() {

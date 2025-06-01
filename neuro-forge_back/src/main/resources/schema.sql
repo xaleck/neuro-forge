@@ -13,9 +13,7 @@ CREATE TABLE IF NOT EXISTS ai_model (
     player_id BIGINT,
     accuracy DOUBLE PRECISION,
     speed_score INTEGER,
-    deployed BOOLEAN DEFAULT FALSE,
     popularity_score INTEGER DEFAULT 0,
-    credits_per_minute INTEGER DEFAULT 0,
     parameters TEXT,
     created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     last_updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -27,9 +25,12 @@ CREATE TABLE IF NOT EXISTS upgrade (
     player_id BIGINT,
     upgrade_type VARCHAR(255),
     level INTEGER DEFAULT 1,
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    start_time TIMESTAMP,
+    end_time TIMESTAMP,
     upgrade_finish_time TIMESTAMP WITHOUT TIME ZONE,
     is_upgrading BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    is_completed BOOLEAN DEFAULT false,
     FOREIGN KEY (player_id) REFERENCES players (id) ON DELETE CASCADE
 );
 
@@ -59,40 +60,11 @@ CREATE TABLE IF NOT EXISTS players (
 -- Убедитесь, что для них используются CREATE TABLE IF NOT EXISTS
 -- и для ограничений ALTER TABLE ... ADD CONSTRAINT ... используется DROP CONSTRAINT IF EXISTS ... перед добавлением
 
-CREATE TABLE IF NOT EXISTS ai_model (
-    id BIGSERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    player_id BIGINT, -- Если есть связь с player, она остается
-    accuracy DOUBLE PRECISION,
-    speed_score INTEGER,
-    deployed BOOLEAN DEFAULT FALSE,
-    popularity_score INTEGER DEFAULT 0,
-    credits_per_minute INTEGER DEFAULT 0,
-    parameters TEXT, -- Или JSON/JSONB в зависимости от ваших нужд
-    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    last_updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (player_id) REFERENCES players (id) ON DELETE SET NULL -- Пример связи с players
-);
-
-CREATE TABLE IF NOT EXISTS upgrade (
-    id BIGSERIAL PRIMARY KEY,
-    player_id BIGINT,
-    upgrade_type VARCHAR(255), -- Например, 'ai_accuracy', 'ai_speed'
-    level INTEGER DEFAULT 1,
-    start_time TIMESTAMP, -- Добавляем эту колонку
-    end_time TIMESTAMP, -- Добавляем эту колонку
-    upgrade_finish_time TIMESTAMP WITHOUT TIME ZONE,
-    is_upgrading BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (player_id) REFERENCES players (id) ON DELETE CASCADE -- Пример связи с players
-);
-
+-- ALTER TABLE upgrade (оставлено, т.к. добавляет новые столбцы, не связанные с deploy)
 ALTER TABLE upgrade
 ADD COLUMN IF NOT EXISTS start_time TIMESTAMP,
 ADD COLUMN IF NOT EXISTS end_time TIMESTAMP,
 ADD COLUMN IF NOT EXISTS is_completed BOOLEAN DEFAULT false;
-
--- И так далее для всех ваших таблиц...
 
 -- Matchmaking Queue Table
 CREATE TABLE IF NOT EXISTS matchmaking_queue (

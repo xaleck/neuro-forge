@@ -58,22 +58,6 @@ export const getModelById = async (modelId) => {
 };
 
 /**
- * Toggle model deployment status
- * @param {number} modelId - The model ID
- * @param {boolean} deploy - Whether to deploy or undeploy the model
- * @returns {Promise<Object>} Updated model data
- */
-export const toggleModelDeployment = async (modelId, deploy) => {
-  try {
-    const response = await api.post(`/models/${modelId}/deployment`, { deploy });
-    return response.data;
-  } catch (error) {
-    const action = deploy ? 'deploy' : 'undeploy';
-    throw error.response?.data || { errorMessage: `Failed to ${action} model` };
-  }
-};
-
-/**
  * Delete a model
  * @param {number} modelId - The model ID
  * @returns {Promise<void>}

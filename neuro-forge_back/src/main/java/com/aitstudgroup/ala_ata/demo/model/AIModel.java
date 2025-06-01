@@ -23,14 +23,8 @@ public class AIModel {
     @Column("speed_score")
     private int speedScore;
 
-    @Column("deployed") // Имя столбца в БД 'deployed'
-    private boolean isDeployed; // Имя поля в Java
-
     @Column("popularity_score")
     private int popularityScore;
-
-    @Column("credits_per_minute")
-    private int creditsPerMinute;
 
     @Column("parameters")
     private String parameters; // В schema.sql TEXT
@@ -87,28 +81,12 @@ public class AIModel {
         this.speedScore = speedScore;
     }
 
-    public boolean isDeployed() { // Геттер
-        return isDeployed;
-    }
-
-    public void setDeployed(boolean deployed) { // Сеттер
-        isDeployed = deployed; // Здесь используется параметр 'deployed', а не поле 'isDeployed' напрямую
-    }
-
     public int getPopularityScore() {
         return popularityScore;
     }
 
     public void setPopularityScore(int popularityScore) {
         this.popularityScore = popularityScore;
-    }
-
-    public int getCreditsPerMinute() {
-        return creditsPerMinute;
-    }
-
-    public void setCreditsPerMinute(int creditsPerMinute) {
-        this.creditsPerMinute = creditsPerMinute;
     }
 
     public String getParameters() {
