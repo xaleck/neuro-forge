@@ -167,7 +167,7 @@ export default function Dashboard() {
             className="flex items-center bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-6 rounded-lg transition duration-150"
           >
             <FiSearch className="mr-2" />
-            Play Solo Translation
+            Переводной вызов
           </button>
 
           <button
@@ -179,20 +179,20 @@ export default function Dashboard() {
           </button>
 
           <button
-            onClick={() => navigate('/ranked-challenge')}
+            onClick={() => navigate('/scipop-quiz')}
             className="flex items-center bg-purple-600 hover:bg-purple-700 text-white py-2 px-6 rounded-lg transition duration-150"
           >
             <FiBarChart className="mr-2" />
-            Play Ranked Challenge
+            Научпоп Викторина
           </button>
 
-          <button
+          {/* <button
             onClick={() => navigate('/blitz-translation')}
             className="flex items-center bg-teal-600 hover:bg-teal-700 text-white py-2 px-6 rounded-lg transition duration-150"
           >
             <FiZap className="mr-2" />
             Play Blitz Translation
-          </button>
+          </button> */}
 
         </div>
 

@@ -7,11 +7,11 @@ export default function LeaderboardPage() {
 
     // Захардкоженные пользователи для демонстрации с новыми именами
     const dummyUsers = [
-        { id: 'dummy1', username: 'Akbar', eloRating: 1850, cloudCredits: 0, matchesPlayed: 0 },
-        { id: 'dummy2', username: 'Azam', eloRating: 1700, cloudCredits: 0, matchesPlayed: 0 },
-        { id: 'dummy3', username: 'Aman', eloRating: 1650, cloudCredits: 0, matchesPlayed: 0 },
-        { id: 'dummy4', username: 'Sasha', eloRating: 1500, cloudCredits: 0, matchesPlayed: 0 },
-        { id: 'dummy5', username: 'Ell', eloRating: 1200, cloudCredits: 0, matchesPlayed: 0 },
+        { id: 'dummy1', username: 'Akbar', eloRating: 1450, cloudCredits: 0, matchesPlayed: 0 },
+        { id: 'dummy2', username: 'Azam', eloRating: 1030, cloudCredits: 0, matchesPlayed: 0 },
+        { id: 'dummy3', username: 'Aman', eloRating: 1230, cloudCredits: 0, matchesPlayed: 0 },
+        { id: 'dummy4', username: 'Sasha', eloRating: 970, cloudCredits: 0, matchesPlayed: 0 },
+        { id: 'dummy5', username: 'Ell', eloRating: 1201, cloudCredits: 0, matchesPlayed: 0 },
     ];
 
     // Объединяем и подготавливаем пользователей для таблицы

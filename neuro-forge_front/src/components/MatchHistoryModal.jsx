@@ -6,7 +6,7 @@ export default function MatchHistoryModal({ isOpen, onClose, matches }) {
     const dummyMatchHistory = [
         {
             id: 'dummy_match_1_ru_en',
-            date: '2024-03-12 10:15',
+            date: '03.05.2025 10:16',
             mode: 'Solo Translation (Demo)',
             finalScore: 85, // Adjusted score
             result: 'Victory',
@@ -27,7 +27,7 @@ export default function MatchHistoryModal({ isOpen, onClose, matches }) {
         },
         {
             id: 'dummy_match_2_ru_en',
-            date: '2024-03-11 18:30',
+            date: '03.04.2025 18:32',
             mode: 'Solo Translation (Demo)',
             finalScore: 30,
             result: 'Defeat',
@@ -48,7 +48,7 @@ export default function MatchHistoryModal({ isOpen, onClose, matches }) {
         },
         {
             id: 'dummy_match_3_ru_en',
-            date: '2024-03-10 12:00',
+            date: '03.05.2025 11:03',
             mode: 'Solo Translation (Demo)',
             finalScore: 60, // Adjusted
             result: 'Completed',
@@ -69,7 +69,7 @@ export default function MatchHistoryModal({ isOpen, onClose, matches }) {
         },
         {
             id: 'dummy_match_4_ru_en',
-            date: '2024-03-09 21:45',
+            date: '03.05.2025 21:44',
             mode: 'Solo Translation (Demo)',
             finalScore: 70, // Adjusted
             result: 'Victory',

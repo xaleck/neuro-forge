@@ -11,6 +11,7 @@ import SoloTranslationBattlePage from './components/SoloTranslationBattlePage';
 import LeaderboardPage from './components/LeaderboardPage';
 import MathQuizPage from './pages/MathQuizPage';
 import BlitzTranslationPage from './pages/BlitzTranslationPage';
+import SciPopQuizPage from './minigames/SciPopQuiz/SciPopQuizPage'; // Предполагаемый путь
 
 // Новый компонент для маршрутов, который будет использовать useAuth
 function AppRoutes() {
@@ -67,6 +68,10 @@ function AppRoutes() {
       <Route
         path="/blitz-translation"
         element={<ProtectedRoute><BlitzTranslationPage /></ProtectedRoute>}
+      />
+      <Route
+        path="/scipop-quiz"
+        element={<ProtectedRoute><SciPopQuizPage /></ProtectedRoute>}
       />
       {/* Запасной маршрут: если залогинен - на дашборд, если нет - на логин */}
       <Route
